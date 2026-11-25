@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+:root {
+  --bg-canvas: #f4f7fa;
+  --bg-surface: #ffffff;
+  --bg-subtle: #eaf0f6;
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --brand-primary: #0b4f6c;
+  --brand-accent: #0a6e7d;
+  --border-subtle: #cbd5e1;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--bg-canvas);
+  color: var(--text-primary);
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, "Noto Sans Tamil", "Latha", sans-serif;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* High-contrast accessible focus ring */
+:focus-visible {
+  outline: 3px solid #0a6e7d;
+  outline-offset: 2px;
+}
+
+/* Skip link for keyboard-only users */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  background: #0b4f6c;
+  color: #ffffff;
+  padding: 0.75rem 1.25rem;
+  font-weight: 600;
+  border-radius: 0 0 0.5rem 0;
+}
+
+.skip-link:focus {
+  left: 0;
+}
+
+/* Respect reduced motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Leaflet container adjustments */
+.leaflet-container {
+  font-family: inherit;
+  z-index: 1;
+}

@@ -34,6 +34,7 @@ interface AppProviderProps {
   initialNotifications: UserNotification[];
   initialRuntimeMode: RuntimeMode;
   initialGeminiConfigured: boolean;
+  initialLocale?: SupportedLocale;
 }
 
 export function AppProvider({
@@ -42,9 +43,10 @@ export function AppProvider({
   initialNotifications,
   initialRuntimeMode,
   initialGeminiConfigured,
+  initialLocale,
 }: AppProviderProps) {
   const [locale, setLocaleState] = useState<SupportedLocale>(
-    initialUser?.preferredLanguage ?? 'en'
+    initialLocale ?? initialUser?.preferredLanguage ?? 'en'
   );
   const [user, setUser] = useState<SessionUser | null>(initialUser);
   const [notifications, setNotifications] =

@@ -1,6 +1,7 @@
+import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
-import { isSupabaseConfigured } from '@/lib/env';
+import { isSupabaseConfigured, isSupabaseServiceRoleConfigured } from '@/lib/env';
 
 export async function createSupabaseServerClient() {
   if (!isSupabaseConfigured()) {
@@ -27,4 +28,26 @@ export async function createSupabaseServerClient() {
       },
     },
   });
+}
+
+/**
+ * Server-only privileged client used strictly for verified background/storage
+ * operations (e.g. signing evidence URLs for already-verified public issues).
+ * Never import in client components.
+ */
+export function createSupabaseServiceRoleClient() {
+  if (!isSupabaseConfigured() || !isSupabaseServiceRoleConfigured()) {
+    return null;
+  }
+
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    }
+  );
 }

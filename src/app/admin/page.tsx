@@ -1,68 +1,38 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ShieldAlert, ShieldCheck } from 'lucide-react';
 import { useApp } from '@/components/providers/AppProvider';
 import { SeverityBadge, StatusBadge } from '@/components/ui/Badges';
 import { ErrorBanner } from '@/components/ui/States';
+import { useCivicIssues } from '@/hooks/useCivicIssues';
 import {
   ISSUE_STATUSES,
   type CivicIssuePublic,
   type IssueStatus,
-  type PaginatedResult,
 } from '@/types/civic';
 
 export default function AdminDashboardPage() {
   const { user, t, pushToast } = useApp();
-  const [issues, setIssues] = useState<CivicIssuePublic[]>([]);
+  const isAdmin = user?.role === 'admin';
+  const { data, setData, loading, error, reload } = useCivicIssues(
+    { pageSize: 50, sortBy: 'priority' },
+    isAdmin
+  );
+
+  const issues = data?.items ?? [];
   const [selectedId, setSelectedId] = useState<string>('');
   const [status, setStatus] = useState<IssueStatus>('verified');
   const [department, setDepartment] = useState('');
   const [assignee, setAssignee] = useState('');
   const [note, setNote] = useState('');
   const [duplicateOfId, setDuplicateOfId] = useState('');
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-  const loadQueue = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch('/api/issues?pageSize=50&sortBy=priority', {
-        cache: 'no-store',
-      });
-      const json = (await res.json()) as {
-        data?: PaginatedResult<CivicIssuePublic>;
-        error?: string;
-      };
-      if (!res.ok || !json.data) {
-        throw new Error(json.error || 'Failed to load admin triage queue.');
-      }
-      setIssues(json.data.items);
-      const first = json.data.items[0];
-      if (first && !selectedId) {
-        setSelectedId(first.id);
-        setStatus(first.status);
-        setDepartment(first.assignedDepartment ?? '');
-        setAssignee(first.assignedToLabel ?? '');
-        setDuplicateOfId(first.duplicateOfId ?? '');
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to load queue.');
-    } finally {
-      setLoading(false);
-    }
-  }, [selectedId]);
-
-  useEffect(() => {
-    if (user?.role === 'admin') {
-      void loadQueue();
-    } else {
-      setLoading(false);
-    }
-  }, [loadQueue, user]);
+  const activeIssue =
+    issues.find((i) => i.id === selectedId) ?? issues[0] ?? null;
 
   function selectIssue(issue: CivicIssuePublic) {
     setSelectedId(issue.id);
@@ -71,16 +41,17 @@ export default function AdminDashboardPage() {
     setAssignee(issue.assignedToLabel ?? '');
     setDuplicateOfId(issue.duplicateOfId ?? '');
     setNote('');
+    setSaveError(null);
   }
 
   async function handleSaveDecision(e: React.FormEvent) {
     e.preventDefault();
-    if (!selectedId) return;
+    if (!activeIssue) return;
 
     setSaving(true);
-    setError(null);
+    setSaveError(null);
     try {
-      const res = await fetch(`/api/issues/${selectedId}`, {
+      const res = await fetch(`/api/issues/${activeIssue.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -100,8 +71,15 @@ export default function AdminDashboardPage() {
       }
 
       const updatedIssue = json.data.issue;
-      setIssues((prev) =>
-        prev.map((item) => (item.id === updatedIssue.id ? updatedIssue : item))
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              items: prev.items.map((item) =>
+                item.id === updatedIssue.id ? updatedIssue : item
+              ),
+            }
+          : prev
       );
       setNote('');
       pushToast(
@@ -109,13 +87,13 @@ export default function AdminDashboardPage() {
         `${updatedIssue.referenceCode} updated to ${t.statuses[updatedIssue.status]}.`
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Update failed.');
+      setSaveError(err instanceof Error ? err.message : 'Update failed.');
     } finally {
       setSaving(false);
     }
   }
 
-  if (!user || user.role !== 'admin') {
+  if (!isAdmin) {
     return (
       <div
         role="alert"
@@ -146,7 +124,7 @@ export default function AdminDashboardPage() {
     );
   }
 
-  const selectedIssue = issues.find((i) => i.id === selectedId) ?? null;
+  const displayError = saveError || error;
 
   return (
     <div className="space-y-6">
@@ -160,7 +138,7 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
-      {error ? <ErrorBanner message={error} onRetry={() => void loadQueue()} /> : null}
+      {displayError ? <ErrorBanner message={displayError} onRetry={reload} /> : null}
 
       {loading ? (
         <div
@@ -176,7 +154,7 @@ export default function AdminDashboardPage() {
             </h2>
             <ul className="max-h-[580px] space-y-2 overflow-y-auto pr-1">
               {issues.map((issue) => {
-                const active = issue.id === selectedId;
+                const active = activeIssue?.id === issue.id;
                 return (
                   <li key={issue.id}>
                     <button
@@ -219,18 +197,18 @@ export default function AdminDashboardPage() {
               {t.admin.verifyAndAssign}
             </h2>
 
-            {selectedIssue ? (
+            {activeIssue ? (
               <form
                 onSubmit={(e) => void handleSaveDecision(e)}
                 className="mt-4 space-y-4"
               >
                 <div className="rounded-xl bg-slate-50 p-3 text-xs">
                   <p className="font-mono font-bold text-slate-600">
-                    {selectedIssue.referenceCode}
+                    {activeIssue.referenceCode}
                   </p>
-                  <p className="mt-1 font-bold text-slate-900">{selectedIssue.title}</p>
+                  <p className="mt-1 font-bold text-slate-900">{activeIssue.title}</p>
                   <Link
-                    href={`/issues/${selectedIssue.id}`}
+                    href={`/issues/${activeIssue.id}`}
                     className="mt-1 inline-block font-semibold text-[#0b4f6c] underline"
                   >
                     Inspect full report & AI explanation &rarr;
@@ -307,7 +285,7 @@ export default function AdminDashboardPage() {
                   >
                     <option value="">None (Primary Report)</option>
                     {issues
-                      .filter((i) => i.id !== selectedIssue.id)
+                      .filter((i) => i.id !== activeIssue.id)
                       .map((candidate) => (
                         <option key={candidate.id} value={candidate.id}>
                           {candidate.referenceCode} — {candidate.title.slice(0, 48)}

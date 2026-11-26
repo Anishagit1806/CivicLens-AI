@@ -2,7 +2,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { NextResponse } from 'next/server';
 import { getUploadsDir } from '@/lib/data/demo-store';
-import { createSupabaseServerClient } from '@/lib/data/supabase-server';
+import {
+  createSupabaseServerClient,
+  createSupabaseServiceRoleClient,
+} from '@/lib/data/supabase-server';
 import { getRuntimeMode } from '@/lib/env';
 import { jsonError } from '@/lib/http/responses';
 
@@ -32,9 +35,23 @@ export async function GET(
     if (!supabase) {
       return jsonError('Storage unavailable.', 503);
     }
-    const { data, error } = await supabase.storage
+
+    // Verify the object is linked to a civic issue visible to the caller (respects RLS)
+    const { data: linkedIssue } = await supabase
+      .from('civic_issues')
+      .select('id')
+      .eq('image_path', decoded)
+      .maybeSingle();
+
+    if (!linkedIssue) {
+      return jsonError('Evidence photo not found or unauthorized.', 404);
+    }
+
+    const signer = createSupabaseServiceRoleClient() ?? supabase;
+    const { data, error } = await signer.storage
       .from('issue-evidence')
       .createSignedUrl(decoded, 120);
+
     if (error || !data?.signedUrl) {
       return jsonError('Evidence photo not found or unauthorized.', 404);
     }

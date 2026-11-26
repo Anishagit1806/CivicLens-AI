@@ -2,7 +2,7 @@ import { cookies } from 'next/headers';
 import { readDemoStore, verifyPassword } from '@/lib/data/demo-store';
 import { createSupabaseServerClient } from '@/lib/data/supabase-server';
 import { getRuntimeMode } from '@/lib/env';
-import { handleApiError, jsonError, jsonOk } from '@/lib/http/responses';
+import { handleApiError, jsonError, jsonOk, parseJsonBody } from '@/lib/http/responses';
 import { checkRateLimit, getClientKey } from '@/lib/security/rate-limit';
 import { DEMO_SESSION_COOKIE, signDemoToken } from '@/lib/security/session';
 import { loginSchema } from '@/lib/validation/schemas';
@@ -18,7 +18,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const body: unknown = await request.json();
+    const body = await parseJsonBody(request);
     const parsed = loginSchema.parse(body);
     const mode = getRuntimeMode();
 

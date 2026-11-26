@@ -1,58 +1,31 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { InteractiveMap } from '@/components/civic/InteractiveMap';
 import { useApp } from '@/components/providers/AppProvider';
 import { ErrorBanner } from '@/components/ui/States';
+import { useCivicIssues } from '@/hooks/useCivicIssues';
 import {
   ISSUE_CATEGORIES,
   ISSUE_SEVERITIES,
-  type CivicIssuePublic,
   type IssueCategory,
   type IssueSeverity,
-  type PaginatedResult,
 } from '@/types/civic';
 
 export default function MapPage() {
   const { t } = useApp();
   const [category, setCategory] = useState<IssueCategory | 'all'>('all');
   const [severity, setSeverity] = useState<IssueSeverity | 'all'>('all');
-  const [issues, setIssues] = useState<CivicIssuePublic[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  const loadMapIssues = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams({
-        page: '1',
-        pageSize: '50',
-        category,
-        severity,
-        sortBy: 'priority',
-      });
-      const res = await fetch(`/api/issues?${params.toString()}`, {
-        cache: 'no-store',
-      });
-      const json = (await res.json()) as {
-        data?: PaginatedResult<CivicIssuePublic>;
-        error?: string;
-      };
-      if (!res.ok || !json.data) {
-        throw new Error(json.error || 'Failed to load map data.');
-      }
-      setIssues(json.data.items);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to load map.');
-    } finally {
-      setLoading(false);
-    }
-  }, [category, severity]);
+  const { data, loading, error, reload } = useCivicIssues({
+    page: 1,
+    pageSize: 50,
+    category,
+    severity,
+    sortBy: 'priority',
+  });
 
-  useEffect(() => {
-    void loadMapIssues();
-  }, [loadMapIssues]);
+  const issues = data?.items ?? [];
 
   return (
     <div className="space-y-6">
@@ -130,7 +103,7 @@ export default function MapPage() {
         </span>
       </div>
 
-      {error ? <ErrorBanner message={error} onRetry={() => void loadMapIssues()} /> : null}
+      {error ? <ErrorBanner message={error} onRetry={reload} /> : null}
 
       {loading ? (
         <div

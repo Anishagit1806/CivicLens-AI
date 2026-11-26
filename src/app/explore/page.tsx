@@ -1,10 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import { IssueCard } from '@/components/civic/IssueCard';
 import { useApp } from '@/components/providers/AppProvider';
 import { EmptyState, ErrorBanner, IssueGridSkeleton } from '@/components/ui/States';
+import { useCivicIssues } from '@/hooks/useCivicIssues';
 import {
   ISSUE_CATEGORIES,
   ISSUE_SEVERITIES,
@@ -13,7 +14,6 @@ import {
   type IssueCategory,
   type IssueSeverity,
   type IssueStatus,
-  type PaginatedResult,
 } from '@/types/civic';
 
 export default function ExplorePage() {
@@ -26,48 +26,17 @@ export default function ExplorePage() {
     'priority'
   );
   const [page, setPage] = useState(1);
-
-  const [data, setData] = useState<PaginatedResult<CivicIssuePublic> | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [upvotingId, setUpvotingId] = useState<string | null>(null);
 
-  const fetchIssues = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams({
-        page: String(page),
-        pageSize: '6',
-        category,
-        severity,
-        status,
-        sortBy,
-      });
-      if (search.trim()) {
-        params.set('search', search.trim());
-      }
-      const res = await fetch(`/api/issues?${params.toString()}`, {
-        cache: 'no-store',
-      });
-      const json = (await res.json()) as {
-        data?: PaginatedResult<CivicIssuePublic>;
-        error?: string;
-      };
-      if (!res.ok || !json.data) {
-        throw new Error(json.error || 'Failed to load civic issues.');
-      }
-      setData(json.data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to fetch issues.');
-    } finally {
-      setLoading(false);
-    }
-  }, [category, page, search, severity, sortBy, status]);
-
-  useEffect(() => {
-    void fetchIssues();
-  }, [fetchIssues]);
+  const { data, setData, loading, error, reload } = useCivicIssues({
+    search,
+    category,
+    severity,
+    status,
+    sortBy,
+    page,
+    pageSize: 6,
+  });
 
   async function handleUpvote(issueId: string) {
     if (!user) {
@@ -255,7 +224,7 @@ export default function ExplorePage() {
         </div>
       </section>
 
-      {error ? <ErrorBanner message={error} onRetry={() => void fetchIssues()} /> : null}
+      {error ? <ErrorBanner message={error} onRetry={reload} /> : null}
 
       {loading ? (
         <IssueGridSkeleton count={6} />

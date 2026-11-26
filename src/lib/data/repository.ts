@@ -631,37 +631,20 @@ export async function upvoteCivicIssue(
     const supabase = await createSupabaseServerClient();
     if (!supabase) return null;
 
-    const { data: current } = await supabase
-      .from('civic_issues')
-      .select('*')
-      .eq('id', issueId)
-      .maybeSingle();
-
-    if (!current) return null;
-    const row = current as SupabaseIssueRow;
-    const nextUpvotes = row.upvote_count + 1;
-    const priority = calculatePriority({
-      severity: row.severity,
-      urgencyScore: row.urgency_score,
-      publicImpactScore: row.public_impact_score,
-      upvoteCount: nextUpvotes,
+    const { data, error } = await supabase.rpc('upvote_civic_issue', {
+      p_issue_id: issueId,
     });
 
-    const { data: updated, error } = await supabase
-      .from('civic_issues')
-      .update({
-        upvote_count: nextUpvotes,
-        priority_score: priority.priorityScore,
-        priority_breakdown: priority.breakdown,
-      })
-      .eq('id', issueId)
-      .select('*')
-      .single();
+    if (error || !Array.isArray(data) || data.length === 0) {
+      return null;
+    }
 
-    if (error || !updated) return null;
+    const row = data[0] as { issue: SupabaseIssueRow; already_upvoted: boolean };
+    if (!row.issue) return null;
+
     return {
-      issue: mapSupabaseRowToPublic(updated as SupabaseIssueRow),
-      alreadyUpvoted: false,
+      issue: mapSupabaseRowToPublic(row.issue),
+      alreadyUpvoted: Boolean(row.already_upvoted),
     };
   }
 

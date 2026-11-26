@@ -1,48 +1,18 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
 import { Bell, PlusCircle } from 'lucide-react';
 import { IssueCard } from '@/components/civic/IssueCard';
 import { useApp } from '@/components/providers/AppProvider';
 import { EmptyState, ErrorBanner, IssueGridSkeleton } from '@/components/ui/States';
-import type { CivicIssuePublic, PaginatedResult } from '@/types/civic';
+import { useCivicIssues } from '@/hooks/useCivicIssues';
 
 export default function CitizenDashboardPage() {
   const { user, notifications, markNotificationAsRead, t } = useApp();
-  const [issues, setIssues] = useState<CivicIssuePublic[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const loadMyIssues = useCallback(async () => {
-    if (!user) {
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch('/api/issues?mineOnly=true&pageSize=24&sortBy=newest', {
-        cache: 'no-store',
-      });
-      const json = (await res.json()) as {
-        data?: PaginatedResult<CivicIssuePublic>;
-        error?: string;
-      };
-      if (!res.ok || !json.data) {
-        throw new Error(json.error || 'Failed to load your reports.');
-      }
-      setIssues(json.data.items);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to load dashboard.');
-    } finally {
-      setLoading(false);
-    }
-  }, [user]);
-
-  useEffect(() => {
-    void loadMyIssues();
-  }, [loadMyIssues]);
+  const { data, loading, error, reload } = useCivicIssues(
+    { mineOnly: true, pageSize: 24, sortBy: 'newest' },
+    Boolean(user)
+  );
 
   if (!user) {
     return (
@@ -69,6 +39,7 @@ export default function CitizenDashboardPage() {
     );
   }
 
+  const issues = data?.items ?? [];
   const resolvedCount = issues.filter((i) => i.status === 'resolved').length;
   const openCount = issues.filter(
     (i) => i.status !== 'resolved' && i.status !== 'rejected'
@@ -166,7 +137,7 @@ export default function CitizenDashboardPage() {
         )}
       </section>
 
-      {error ? <ErrorBanner message={error} onRetry={() => void loadMyIssues()} /> : null}
+      {error ? <ErrorBanner message={error} onRetry={reload} /> : null}
 
       <section aria-labelledby="my-reports-heading" className="space-y-4">
         <h2 id="my-reports-heading" className="text-xl font-bold text-slate-900">

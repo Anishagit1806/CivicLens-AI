@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { cookies } from 'next/headers';
 import './globals.css';
 import { Footer } from '@/components/layout/Footer';
 import { Navbar } from '@/components/layout/Navbar';
@@ -7,6 +8,7 @@ import { AppProvider } from '@/components/providers/AppProvider';
 import { listUserNotifications } from '@/lib/data/repository';
 import { getRuntimeMode, isGeminiConfigured } from '@/lib/env';
 import { getCurrentUser } from '@/lib/security/session';
+import type { SupportedLocale } from '@/types/civic';
 
 export const metadata: Metadata = {
   title: 'CivicLens AI — Intelligent Civic Issue Detection & Prioritization',
@@ -21,19 +23,25 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const user = await getCurrentUser();
+  const [user, cookieStore] = await Promise.all([getCurrentUser(), cookies()]);
   const notifications = user ? await listUserNotifications(user.id) : [];
   const runtimeMode = getRuntimeMode();
   const geminiConfigured = isGeminiConfigured();
+  const cookieLocale = cookieStore.get('civiclens_locale')?.value;
+  const initialLocale: SupportedLocale =
+    cookieLocale === 'ta' || cookieLocale === 'en'
+      ? cookieLocale
+      : user?.preferredLanguage ?? 'en';
 
   return (
-    <html lang={user?.preferredLanguage ?? 'en'}>
+    <html lang={initialLocale}>
       <body className="flex min-h-screen flex-col">
         <AppProvider
           initialUser={user}
           initialNotifications={notifications}
           initialRuntimeMode={runtimeMode}
           initialGeminiConfigured={geminiConfigured}
+          initialLocale={initialLocale}
         >
           <RuntimeModeBanner />
           <Navbar />

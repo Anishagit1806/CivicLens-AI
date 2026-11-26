@@ -136,7 +136,12 @@ export async function analyzeCivicIssue(params: {
         continue;
       }
 
-      const parsedJson: unknown = JSON.parse(rawText);
+      const cleanJson = rawText
+        .replace(/^```(?:json)?\s*/i, '')
+        .replace(/\s*```$/i, '')
+        .trim();
+
+      const parsedJson: unknown = JSON.parse(cleanJson);
       const validated = aiTriageResponseSchema.safeParse(parsedJson);
       if (!validated.success) {
         continue;

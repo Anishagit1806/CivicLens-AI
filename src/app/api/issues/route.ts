@@ -10,7 +10,13 @@ import {
 } from '@/lib/data/repository';
 import { createSupabaseServerClient } from '@/lib/data/supabase-server';
 import { getRuntimeMode } from '@/lib/env';
-import { handleApiError, jsonError, jsonOk } from '@/lib/http/responses';
+import {
+  handleApiError,
+  jsonError,
+  jsonOk,
+  parseFormData,
+  parseJsonBody,
+} from '@/lib/http/responses';
 import { checkRateLimit, getClientKey } from '@/lib/security/rate-limit';
 import { getCurrentUser, requireAuth } from '@/lib/security/session';
 import { validateUploadedImage } from '@/lib/security/upload';
@@ -55,7 +61,7 @@ export async function POST(request: Request) {
     let validatedImage: ReturnType<typeof validateUploadedImage> | null = null;
 
     if (contentType.includes('multipart/form-data')) {
-      const formData = await request.formData();
+      const formData = await parseFormData(request);
       payload = {
         title: formData.get('title'),
         description: formData.get('description'),
@@ -68,15 +74,24 @@ export async function POST(request: Request) {
       };
 
       const fileEntry = formData.get('image');
-      if (fileEntry instanceof File && fileEntry.size > 0) {
+      if (
+        fileEntry &&
+        typeof fileEntry === 'object' &&
+        'arrayBuffer' in fileEntry &&
+        fileEntry.size > 0
+      ) {
         const buffer = new Uint8Array(await fileEntry.arrayBuffer());
-        validatedImage = validateUploadedImage(fileEntry.name, fileEntry.type, buffer);
+        validatedImage = validateUploadedImage(
+          fileEntry.name || 'upload.jpg',
+          fileEntry.type || '',
+          buffer
+        );
         if (!validatedImage.valid) {
           return jsonError(validatedImage.error, 400);
         }
       }
     } else {
-      const jsonBody: unknown = await request.json();
+      const jsonBody = await parseJsonBody(request);
       if (!jsonBody || typeof jsonBody !== 'object') {
         return jsonError('Invalid JSON request payload.', 400);
       }

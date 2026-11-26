@@ -1,7 +1,7 @@
 import { analyzeCivicIssue } from '@/lib/ai/gemini';
 import { findDuplicateMatches } from '@/lib/data/repository';
 import { calculatePriority } from '@/lib/domain/priority';
-import { handleApiError, jsonError, jsonOk } from '@/lib/http/responses';
+import { handleApiError, jsonError, jsonOk, parseJsonBody } from '@/lib/http/responses';
 import { checkRateLimit, getClientKey } from '@/lib/security/rate-limit';
 import { requireAuth } from '@/lib/security/session';
 import { aiAnalyzeRequestSchema } from '@/lib/validation/schemas';
@@ -18,7 +18,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const body: unknown = await request.json();
+    const body = await parseJsonBody(request);
     const parsed = aiAnalyzeRequestSchema.parse(body);
 
     const triage = await analyzeCivicIssue({

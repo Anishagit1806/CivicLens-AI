@@ -51,7 +51,7 @@ export function haversineDistanceMeters(
 export function tokenizeForSimilarity(text: string): Set<string> {
   const normalized = text
     .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/[^\p{L}\p{M}\p{N}\s]/gu, ' ')
     .split(/\s+/)
     .filter((token) => token.length >= 3 && !STOPWORDS.has(token));
 

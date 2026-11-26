@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { listUserNotifications, markNotificationRead } from '@/lib/data/repository';
-import { handleApiError, jsonError, jsonOk } from '@/lib/http/responses';
+import { handleApiError, jsonError, jsonOk, parseJsonBody } from '@/lib/http/responses';
 import { requireAuth } from '@/lib/security/session';
 
 const patchSchema = z.object({
@@ -20,7 +20,7 @@ export async function GET() {
 export async function PATCH(request: Request) {
   try {
     const user = await requireAuth();
-    const body: unknown = await request.json();
+    const body = await parseJsonBody(request);
     const parsed = patchSchema.parse(body);
 
     const updated = await markNotificationRead(parsed.notificationId, user.id);

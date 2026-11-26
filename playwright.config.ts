@@ -18,7 +18,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npx next dev --port 3100 --hostname 127.0.0.1',
+    command: 'npx next start --port 3100 --hostname 127.0.0.1',
     url: 'http://127.0.0.1:3100',
     reuseExistingServer: false,
     timeout: 120_000,

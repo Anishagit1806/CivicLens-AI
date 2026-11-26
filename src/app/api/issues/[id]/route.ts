@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { getIssueById, updateIssueByAdmin } from '@/lib/data/repository';
-import { handleApiError, jsonError, jsonOk } from '@/lib/http/responses';
+import { handleApiError, jsonError, jsonOk, parseJsonBody } from '@/lib/http/responses';
 import { getCurrentUser, requireAdmin } from '@/lib/security/session';
 import { updateIssueAdminSchema } from '@/lib/validation/schemas';
 
@@ -41,7 +41,7 @@ export async function PATCH(
       return jsonError('Invalid issue ID.', 400);
     }
 
-    const body: unknown = await request.json();
+    const body = await parseJsonBody(request);
     const parsed = updateIssueAdminSchema.parse(body);
 
     const updated = await updateIssueByAdmin({

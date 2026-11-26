@@ -100,7 +100,8 @@ const CATEGORY_RULES: CategoryRule[] = [
   {
     category: 'road_damage',
     keywords: [
-      'road',
+      'road damage',
+      'roadway',
       'asphalt',
       'pavement',
       'sinkhole',
@@ -108,7 +109,7 @@ const CATEGORY_RULES: CategoryRule[] = [
       'divider',
       'footpath',
       'bridge',
-      'சாலை',
+      'சாலை சேதம்',
       'உடைப்பு',
     ],
     baseUrgency: 70,
@@ -190,6 +191,7 @@ export function runDeterministicTriage(params: {
   const combined = `${params.title} ${params.description} ${params.locationText ?? ''}`.toLowerCase();
 
   let bestRule: CategoryRule | null = null;
+  let bestScore = 0;
   let bestHits = 0;
 
   for (const rule of CATEGORY_RULES) {
@@ -199,7 +201,10 @@ export function runDeterministicTriage(params: {
         hits += 1;
       }
     }
-    if (hits > bestHits) {
+    const weightedScore =
+      hits + (hits > 0 && params.selectedCategory === rule.category ? 0.5 : 0);
+    if (weightedScore > bestScore) {
+      bestScore = weightedScore;
       bestHits = hits;
       bestRule = rule;
     }

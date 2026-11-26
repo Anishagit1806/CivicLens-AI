@@ -339,5 +339,121 @@ CREATE POLICY "Signed or authorized read for issue evidence"
     AND (
       (storage.foldername(name))[1] = auth.uid()::text
       OR public.is_admin()
+      OR EXISTS (
+        SELECT 1 FROM public.civic_issues ci
+        WHERE ci.image_path = name
+          AND ci.status <> 'rejected'
+      )
     )
   );
+
+-- ----------------------------------------------------------------------------
+-- 6. Community Corroboration / Upvotes Table & Atomic RPC
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.issue_upvotes (
+  issue_id uuid NOT NULL REFERENCES public.civic_issues(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (issue_id, user_id)
+);
+
+ALTER TABLE public.issue_upvotes ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users view own upvotes" ON public.issue_upvotes;
+CREATE POLICY "Users view own upvotes"
+  ON public.issue_upvotes FOR SELECT
+  USING (auth.uid() = user_id OR public.is_admin());
+
+DROP POLICY IF EXISTS "Authenticated users upvote once" ON public.issue_upvotes;
+CREATE POLICY "Authenticated users upvote once"
+  ON public.issue_upvotes FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE OR REPLACE FUNCTION public.upvote_civic_issue(p_issue_id uuid)
+RETURNS TABLE (
+  issue jsonb,
+  already_upvoted boolean
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_user_id uuid := auth.uid();
+  v_inserted boolean := false;
+  v_issue public.civic_issues%ROWTYPE;
+  v_sev_score numeric;
+  v_comm_score numeric;
+  v_new_priority numeric;
+  v_breakdown jsonb;
+BEGIN
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'Authentication required';
+  END IF;
+
+  INSERT INTO public.issue_upvotes (issue_id, user_id)
+  VALUES (p_issue_id, v_user_id)
+  ON CONFLICT (issue_id, user_id) DO NOTHING;
+
+  GET DIAGNOSTICS v_inserted = ROW_COUNT;
+
+  IF NOT v_inserted THEN
+    SELECT * INTO v_issue FROM public.civic_issues WHERE id = p_issue_id;
+    IF NOT FOUND THEN
+      RETURN;
+    END IF;
+    RETURN QUERY SELECT to_jsonb(v_issue), true;
+    RETURN;
+  END IF;
+
+  UPDATE public.civic_issues
+  SET upvote_count = upvote_count + 1
+  WHERE id = p_issue_id
+  RETURNING * INTO v_issue;
+
+  IF NOT FOUND THEN
+    RETURN;
+  END IF;
+
+  v_sev_score := CASE v_issue.severity
+    WHEN 'critical' THEN 95
+    WHEN 'high' THEN 75
+    WHEN 'medium' THEN 45
+    ELSE 20
+  END;
+  v_comm_score := LEAST(100, GREATEST(0, (v_issue.upvote_count - 1) * 15));
+  v_new_priority := ROUND(
+    LEAST(100, GREATEST(0,
+      v_sev_score * 0.40 +
+      v_issue.urgency_score * 0.30 +
+      v_issue.public_impact_score * 0.25 +
+      v_comm_score * 0.05
+    )),
+    2
+  );
+
+  v_breakdown := jsonb_build_object(
+    'severityWeight', 0.4,
+    'severityScore', v_sev_score,
+    'urgencyWeight', 0.3,
+    'urgencyScore', v_issue.urgency_score,
+    'impactWeight', 0.25,
+    'publicImpactScore', v_issue.public_impact_score,
+    'communityWeight', 0.05,
+    'communitySignalScore', v_comm_score,
+    'finalScore', v_new_priority,
+    'formulaSummary', format(
+      '0.40×Severity(%s) + 0.30×Urgency(%s) + 0.25×Impact(%s) + 0.05×Community(%s) = %s',
+      v_sev_score, v_issue.urgency_score, v_issue.public_impact_score, v_comm_score, v_new_priority
+    )
+  );
+
+  UPDATE public.civic_issues
+  SET priority_score = v_new_priority,
+      priority_breakdown = v_breakdown
+  WHERE id = p_issue_id
+  RETURNING * INTO v_issue;
+
+  RETURN QUERY SELECT to_jsonb(v_issue), false;
+END;
+$$;

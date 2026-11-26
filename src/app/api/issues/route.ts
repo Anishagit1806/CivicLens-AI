@@ -177,6 +177,7 @@ export async function POST(request: Request) {
       201
     );
   } catch (error) {
+    console.error('[CivicLens] ISSUE SUBMISSION ERROR:', error);
     return handleApiError(error);
   }
 }

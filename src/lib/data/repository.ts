@@ -147,9 +147,20 @@ export async function listIssues(
     const to = from + pageSize - 1;
     const { data, count, error } = await req.range(from, to);
 
+    
     if (error) {
-      throw new Error('Failed to load civic issues from database.');
+      const errorMessage = [
+      `Code: ${error.code ?? 'UNKNOWN'}`,
+      `Message: ${error.message ?? 'No message returned'}`,
+      `Details: ${error.details ?? 'None'}`,
+      `Hint: ${error.hint ?? 'None'}`,
+      ].join(' | ');
+
+      console.error('Supabase database error:', errorMessage);
+
+      throw new Error(`Supabase Database Error: ${errorMessage}`);
     }
+  
 
     const total = count ?? 0;
     const items = ((data ?? []) as SupabaseIssueRow[]).map(mapSupabaseRowToPublic);
@@ -385,6 +396,14 @@ export async function createCivicIssueRecord(params: {
       .single();
 
     if (error || !data) {
+      console.error('[CivicLens] Supabase insert error details:', {
+        message: error?.message,
+        code: error?.code,
+        details: error?.details,
+        hint: error?.hint,
+        status: error?.status,
+      });
+
       throw new Error('Unable to persist civic issue report.');
     }
 
